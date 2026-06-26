@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Floody, Muddy, and Green Data Viewer</title>
 
+  <link rel="icon" type="image/png" href="favicon.png">
+
   <!-- Plotly -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
   <!-- PapaParse for CSV -->
@@ -338,7 +340,7 @@
 
   <!-- Header -->
   <header id="app-header">
-    <div id="app-title">Floody, Muddy, and Green — Data Viewer</div>
+    <div id="app-title">Floody, Muddy, and Green Data Viewer</div>
     <div id="header-controls">
       <input id="phase-input" type="text" placeholder="Enter Phase Code" autocomplete="off" />
 
@@ -653,13 +655,13 @@
       if (showLake) {
         lakeBloomsData.forEach(d => shapes.push({
           type: "line", yref: "paper", y0: 0, y1: 1, x0: d, x1: d,
-          line: { color: "forestgreen", dash: "dash", width: 1 }
+          line: { color: "forestgreen", dash: "dash", width: 2 }
         }));
       }
       if (showEst) {
         estBloomsData.forEach(d => shapes.push({
           type: "line", yref: "paper", y0: 0, y1: 1, x0: d, x1: d,
-          line: { color: "lightgreen", dash: "dash", width: 1 }
+          line: { color: "lightgreen", dash: "dash", width: 2 }
         }));
       }
       return shapes;
@@ -765,7 +767,7 @@
           hovermode: "x unified",
           plot_bgcolor: "white",
           paper_bgcolor: "white",
-          margin: { t: 20, r: 20, b: 50, l: 70 }
+          margin: { t: 20, r: 20, b: 70, l: 70 }
         }, { displaylogo: false, responsive: true });
 
       } else {
@@ -812,7 +814,7 @@
           hovermode: "closest",
           plot_bgcolor: "white",
           paper_bgcolor: "white",
-          margin: { t: 20, r: 20, b: 60, l: 70 }
+          margin: { t: 20, r: 20, b: 70, l: 70 }
         }, { displaylogo: false, responsive: true });
       }
     }
@@ -938,6 +940,7 @@
       document.getElementById("show-second-plot").addEventListener("change", e => {
         showSecondPlot = e.target.checked;
         document.getElementById("card2").style.display = showSecondPlot ? "flex" : "none";
+        Plotly.Plots.resize("plot1");
         if (showSecondPlot) {
           updatePlotControls(2);
           renderPlot(2);
