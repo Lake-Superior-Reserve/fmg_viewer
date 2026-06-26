@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Floody, Muddy, and Green Data Viewer</title>
+
+  <!-- Plotly -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+  <!-- PapaParse for CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --bg: #f7f9fb;
+      --surface: #ffffff;
+      --border: #d4dce6;
+      --text: #1a2535;
+      --muted: #6b7f96;
+      --accent: #2E86AB;
+      --accent2: #1a5c7a;
+      --bloom-lake: forestgreen;
+      --bloom-est: #90ee90;
+      --radius: 6px;
+      --shadow: 0 1px 4px rgba(0, 0, 0, .08);
+      --header-h: 56px;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    #app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: var(--shadow);
+      flex-wrap: wrap;
+    }
+
+    #app-title {
+      font-weight: 700;
+      font-size: 15px;
+      white-space: nowrap;
+      color: var(--accent2);
+      letter-spacing: -0.01em;
+    }
+
+    #header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* ── Controls ── */
+    input[type="text"],
+    select {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 5px 10px;
+      font-size: 13px;
+      background: var(--surface);
+      color: var(--text);
+      height: 32px;
+    }
+
+    input[type="text"]:focus,
+    select:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    #phase-input {
+      width: 160px;
+    }
+
+    label.checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    label.checkbox-label input {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 5px 12px;
+      font-size: 13px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      height: 32px;
+      white-space: nowrap;
+      font-weight: 500;
+      transition: background .15s, border-color .15s;
+    }
+
+    .btn:hover {
+      background: var(--bg);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── Plot area ── */
+    #plots-container {
+      display: flex;
+      gap: 12px;
+      padding: 12px;
+      height: calc(100vh - var(--header-h) - 24px);
+    }
+
+    .plot-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .plot-card-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .plot-selects-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .plot-selects-row select {
+      max-width: 280px;
+      min-width: 120px;
+      flex: 1;
+    }
+
+    .plot-body {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    .plot-div {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ── Site selector (conditional) ── */
+    .site-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .site-row select {
+      min-width: 120px;
+    }
+
+    .site-row .year-sel {
+      width: 130px;
+    }
+
+    /* ── Map modal ── */
+    #map-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .45);
+      z-index: 9000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #map-modal-overlay.open {
+      display: flex;
+    }
+
+    #map-modal {
+      background: var(--surface);
+      border-radius: 8px;
+      width: min(90vw, 900px);
+      height: 70vh;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, .25);
+    }
+
+    #map-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 10000;
+      background: white;
+      border: 2px solid rgba(0, 0, 0, .2);
+      border-radius: var(--radius);
+      width: 30px;
+      height: 30px;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    #map-close:hover {
+      background: #f4f4f4;
+    }
+
+    #site-map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Legend for bloom lines ── */
+    #bloom-legend {
+      display: none;
+      align-items: center;
+      gap: 14px;
+      font-size: 12px;
+      padding: 4px 12px 6px;
+      color: var(--muted);
+    }
+
+    #bloom-legend.visible {
+      display: flex;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-swatch {
+      width: 24px;
+      height: 2px;
+      border-top: 2px dashed;
+    }
+
+    .swatch-lake {
+      border-color: var(--bloom-lake);
+    }
+
+    .swatch-est {
+      border-color: var(--bloom-est);
+    }
+
+    /* ── Hidden ── */
+    .hidden {
+      display: none !important;
+    }
+
+    /* ── Loading spinner ── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #loading-overlay p {
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Loading -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p>Loading data…</p>
+  </div>
+
+  <!-- Header -->
+  <header id="app-header">
+    <div id="app-title">Floody, Muddy, and Green — Data Viewer</div>
+    <div id="header-controls">
+      <input id="phase-input" type="text" placeholder="Enter Phase Code" autocomplete="off" />
+
+      <div id="bloom-controls" class="hidden" style="display:flex;gap:10px;">
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-lake-blooms" /> Show Lake Blooms
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-est-blooms" /> Show Estuary Blooms
+        </label>
+      </div>
+
+      <label class="checkbox-label">
+        <input type="checkbox" id="show-second-plot" checked /> Show Second Plot
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="lock-y-axis" /> Lock Y-Axis
+      </label>
+      <button class="btn" id="show-map-btn">Show Site Map</button>
+    </div>
+  </header>
+
+  <!-- Bloom legend (shown below header when blooms active) -->
+  <div id="bloom-legend">
+    <span style="font-weight:500;color:var(--text);">Bloom indicators:</span>
+    <span class="legend-item"><span class="legend-swatch swatch-lake"></span>Lake bloom</span>
+    <span class="legend-item"><span class="legend-swatch swatch-est"></span>Estuary bloom</span>
+  </div>
+
+  <!-- Plots -->
+  <div id="plots-container">
+    <!-- Plot 1 -->
+    <div class="plot-card" id="card1">
+      <div class="plot-card-header">
+        <div class="plot-selects-row">
+          <select id="var-x1"></select>
+          <select id="var-y1"></select>
+        </div>
+        <div class="plot-selects-row site-row">
+          <select id="year1" class="year-sel"></select>
+          <select id="site1" class="hidden"></select>
+        </div>
+      </div>
+      <div class="plot-body">
+        <div class="plot-div" id="plot1"></div>
+      </div>
+    </div>
+
+    <!-- Plot 2 -->
+    <div class="plot-card" id="card2">
+      <div class="plot-card-header">
+        <div class="plot-selects-row">
+          <select id="var-x2"></select>
+          <select id="var-y2"></select>
+        </div>
+        <div class="plot-selects-row site-row">
+          <select id="year2" class="year-sel"></select>
+          <select id="site2" class="hidden"></select>
+        </div>
+      </div>
+      <div class="plot-body">
+        <div class="plot-div" id="plot2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map Modal -->
+  <div id="map-modal-overlay">
+    <div id="map-modal">
+      <button id="map-close">×</button>
+      <div id="site-map"></div>
+    </div>
+  </div>
+
+  <script>
+    // ────────────────────────────────────────────────────────────
+    // CONFIG
+    // ────────────────────────────────────────────────────────────
+    const VAR_LABELS = {
+      discharge_nemadji: "Discharge (ft³/s) - Nemadji River",
+      discharge_brule: "Discharge (ft³/s) - Bois Brule River",
+      airtemp_buoy: "Air Temperature (°C) - Offshore Buoy",
+      watertemp: "Water Temperature (°C) - Offshore Buoy",
+      windspeed_lake: "Wind Speed (m/s) - Port Wing",
+      windspeed_slre: "Wind Speed (m/s) - Pokegama Bay",
+      precip_slre: "Precipitation (mm) - Pokegama Bay",
+      temp: "Water Temperature (°C)",
+      turb: "Turbidity (NTU)",
+      tp: "Total Phosphorus (mg/L)",
+      chl: "Chlorophyll-a (μg/L)"
+    };
+
+    const VAR_CHOICES_LIMITED = [
+      { value: "discharge_nemadji", label: "Discharge (ft³/s) - Nemadji River" },
+      { value: "discharge_brule", label: "Discharge (ft³/s) - Bois Brule River" },
+      { value: "airtemp_buoy", label: "Air Temperature (°C) - Offshore Buoy" },
+      { value: "watertemp", label: "Water Temperature (°C) - Offshore Buoy" },
+      { value: "windspeed_lake", label: "Wind Speed (m/s) - Port Wing" },
+      { value: "windspeed_slre", label: "Wind Speed (m/s) - Pokegama Bay" },
+      { value: "precip_slre", label: "Precipitation (mm) - Pokegama Bay" },
+      { value: "temp", label: "Water Temperature (°C)" },
+      { value: "turb", label: "Turbidity (NTU)" }
+    ];
+
+    const VAR_CHOICES_EXTRA = [
+      { value: "tp", label: "Total Phosphorus (mg/L)" },
+      { value: "chl", label: "Chlorophyll-a (μg/L)" }
+    ];
+
+    // Variables that require a site selector
+    const SITE_VARS = new Set(["temp", "turb", "tp", "chl"]);
+
+    // Variables that come one-row-per-date (not site-specific)
+    const GLOBAL_VARS = new Set([
+      "discharge_nemadji", "discharge_brule", "airtemp_buoy",
+      "watertemp", "windspeed_lake", "windspeed_slre", "precip_slre"
+    ]);
+
+    const SITE_CHOICES = [
+      { value: "lksba", label: "Barker's Island - SLRE" },
+      { value: "Site 1", label: "Lake Superior - West" },
+      { value: "Site 8", label: "Lake Superior - Mid" },
+      { value: "Mawikwe Bay", label: "Lake Superior - East" }
+    ];
+
+    const SITE_NAMES = {
+      "lksba": "Barker's Island - SLRE",
+      "Site 1": "Lake Superior - West",
+      "Site 8": "Lake Superior - Mid",
+      "Mawikwe Bay": "Lake Superior - East"
+    };
+
+    // Which site does each non-site-specific variable come from? (for map highlighting)
+    function varToSite(varName, fallbackSite) {
+      if (varName === "discharge_nemadji") return "nemadji";
+      if (varName === "discharge_brule") return "brule";
+      if (varName === "airtemp_buoy" || varName === "watertemp") return "llo";
+      if (varName === "windspeed_lake") return "pngw3";
+      if (varName === "windspeed_slre" || varName === "precip_slre") return "lkspo";
+      return fallbackSite;
+    }
+
+    const CSV_PATHS = {
+      water: "app_data/water_data.csv",
+      locations: "app_data/locations.csv",
+      blooms: "app_data/blooms.csv"
+    };
+
+    // ────────────────────────────────────────────────────────────
+    // STATE
+    // ────────────────────────────────────────────────────────────
+    let waterData = [];       // all rows
+    let siteLocations = [];
+    let lakeBloomsData = [];
+    let estBloomsData = [];
+
+    let phase = "phase1";     // phase1 | phase2 | phase3
+    let showSecondPlot = true;
+    let lockYAxis = false;
+    let showLakeBlooms = false;
+    let showEstBlooms = false;
+
+    // Per-plot state
+    const plotState = {
+      1: { varX: "date", varY: "discharge_nemadji", year: "all", site: "lksba" },
+      2: { varX: "date", varY: "watertemp", year: "all", site: "lksba" }
+    };
+
+    let leafletMap = null;
+    let mapInitialized = false;
+
+    // ────────────────────────────────────────────────────────────
+    // DATA LOADING
+    // ────────────────────────────────────────────────────────────
+    function parseCSV(path) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(path, {
+          download: true,
+          header: true,
+          dynamicTyping: true,
+          skipEmptyLines: true,
+          complete: r => resolve(r.data),
+          error: reject
+        });
+      });
+    }
+
+    async function loadData() {
+      const [water, locs, blooms] = await Promise.all([
+        parseCSV(CSV_PATHS.water),
+        parseCSV(CSV_PATHS.locations),
+        parseCSV(CSV_PATHS.blooms)
+      ]);
+
+      waterData = water.map(r => ({
+        ...r,
+        date: r.date, // keep as string; Plotly handles date strings fine
+        year: r.year != null ? Number(r.year) : null
+      }));
+
+      siteLocations = locs;
+
+      lakeBloomsData = blooms.filter(r => r.site !== "lksba").map(r => r.date);
+      estBloomsData = blooms.filter(r => r.site === "lksba").map(r => r.date);
+
+      document.getElementById("loading-overlay").style.display = "none";
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // UI HELPERS
+    // ────────────────────────────────────────────────────────────
+    function getVarChoices() {
+      if (phase === "phase2" || phase === "phase3") {
+        return [...VAR_CHOICES_LIMITED, ...VAR_CHOICES_EXTRA];
+      }
+      return VAR_CHOICES_LIMITED;
+    }
+
+    function populateSelect(el, options, selected) {
+      const prev = el.value || selected;
+      el.innerHTML = "";
+      options.forEach(({ value, label }) => {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = label;
+        if (value === prev) opt.selected = true;
+        el.appendChild(opt);
+      });
+      // fallback to desired selected if prev not found
+      if (!el.value && selected) el.value = selected;
+    }
+
+    function buildXChoices(varChoices) {
+      return [{ value: "date", label: "Date" }, ...varChoices];
+    }
+
+    function getAvailableYears(plotIdx) {
+      const s = plotState[plotIdx];
+      const varX = s.varX, varY = s.varY, site = s.site;
+      let rows = waterData;
+
+      // filter to rows that have data for the selected variables
+      if (varX === "date") {
+        rows = rows.filter(r => r[varY] != null && !isNaN(r[varY]));
+      } else {
+        rows = rows.filter(r => (r[varY] != null && !isNaN(r[varY])) || (r[varX] != null && !isNaN(r[varX])));
+      }
+
+      if ((SITE_VARS.has(varY) || SITE_VARS.has(varX)) && site) {
+        rows = rows.filter(r => r.site === site);
+      }
+
+      const years = [...new Set(rows.map(r => r.year).filter(y => y != null))].sort((a, b) => a - b);
+      return years;
+    }
+
+    function updateYearSelect(plotIdx) {
+      const el = document.getElementById(`year${plotIdx}`);
+      const years = getAvailableYears(plotIdx);
+      const prev = plotState[plotIdx].year;
+      el.innerHTML = `<option value="all">All Years</option>`;
+      years.forEach(y => {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.textContent = y;
+        if (String(y) === String(prev)) opt.selected = true;
+        el.appendChild(opt);
+      });
+      if (!el.value) el.value = "all";
+      plotState[plotIdx].year = el.value;
+    }
+
+    function updatePlotControls(plotIdx) {
+      const s = plotState[plotIdx];
+      const varChoices = getVarChoices();
+
+      // X selector
+      const xEl = document.getElementById(`var-x${plotIdx}`);
+      populateSelect(xEl, buildXChoices(varChoices), s.varX);
+      s.varX = xEl.value;
+
+      // Y selector — exclude the chosen X var
+      const yChoices = varChoices.filter(c => c.value !== s.varX);
+      const yEl = document.getElementById(`var-y${plotIdx}`);
+      populateSelect(yEl, yChoices, s.varY);
+      s.varY = yEl.value;
+
+      // Site selector
+      const siteEl = document.getElementById(`site${plotIdx}`);
+      const needsSite = SITE_VARS.has(s.varX) || SITE_VARS.has(s.varY);
+      if (needsSite) {
+        populateSelect(siteEl, SITE_CHOICES, s.site);
+        s.site = siteEl.value;
+        siteEl.classList.remove("hidden");
+      } else {
+        siteEl.classList.add("hidden");
+      }
+
+      updateYearSelect(plotIdx);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // PLOTTING
+    // ────────────────────────────────────────────────────────────
+    function getYearRange(yearInput) {
+      if (yearInput === "all") return [null, null]; // no range restriction
+      return [`${yearInput}-01-01`, `${yearInput}-12-31`];
+    }
+
+    function makeBloomShapes(showLake, showEst) {
+      const shapes = [];
+      if (showLake) {
+        lakeBloomsData.forEach(d => shapes.push({
+          type: "line", yref: "paper", y0: 0, y1: 1, x0: d, x1: d,
+          line: { color: "forestgreen", dash: "dash", width: 1 }
+        }));
+      }
+      if (showEst) {
+        estBloomsData.forEach(d => shapes.push({
+          type: "line", yref: "paper", y0: 0, y1: 1, x0: d, x1: d,
+          line: { color: "lightgreen", dash: "dash", width: 1 }
+        }));
+      }
+      return shapes;
+    }
+
+    function filterRows(rows, yearInput, varY, varX, site) {
+      let data = rows;
+      if (yearInput !== "all") {
+        data = data.filter(r => String(r.year) === String(yearInput));
+      }
+      if ((SITE_VARS.has(varY) || SITE_VARS.has(varX)) && site) {
+        data = data.filter(r => r.site === site);
+      }
+      return data;
+    }
+
+    // Deduplicate global vars (one row per date)
+    function dedupByDate(rows, cols) {
+      const seen = new Map();
+      rows.forEach(r => {
+        if (!seen.has(r.date)) {
+          const obj = { date: r.date, year: r.year };
+          cols.forEach(c => obj[c] = r[c]);
+          seen.set(r.date, obj);
+        }
+      });
+      return [...seen.values()];
+    }
+
+    function computeAxisRange(varName) {
+      const vals = waterData.map(r => r[varName]).filter(v => v != null && !isNaN(v));
+      if (!vals.length) return undefined;
+      const mn = Math.min(...vals), mx = Math.max(...vals);
+      const buf = (mx - mn) * 0.05;
+      return [mn - buf, mx + buf];
+    }
+
+    function renderPlot(plotIdx) {
+      const s = plotState[plotIdx];
+      const { varX, varY, year, site } = s;
+      const divId = `plot${plotIdx}`;
+
+      let yLabel = VAR_LABELS[varY] || varY;
+      let xLabel = varX === "date" ? "Date" : (VAR_LABELS[varX] || varX);
+
+      const yAxisCfg = {
+        title: yLabel,
+        showgrid: true,
+        gridcolor: "lightgray",
+        automargin: true
+      };
+      const xAxisCfg = {
+        title: xLabel,
+        showgrid: true,
+        gridcolor: "lightgray",
+        automargin: true
+      };
+
+      if (lockYAxis) {
+        const yr = computeAxisRange(varY);
+        if (yr) yAxisCfg.range = yr;
+        if (varX !== "date") {
+          const xr = computeAxisRange(varX);
+          if (xr) xAxisCfg.range = xr;
+        }
+      }
+
+      // ── TIME SERIES ──
+      if (varX === "date") {
+        let rows;
+        if (GLOBAL_VARS.has(varY)) {
+          const allRows = filterRows(waterData, year, varY, varX, site);
+          rows = dedupByDate(allRows, [varY]);
+        } else {
+          rows = filterRows(waterData, year, varY, varX, site);
+          if (site && SITE_VARS.has(varY)) {
+            yAxisCfg.title = `${yLabel} - ${SITE_NAMES[site] || site}`;
+          }
+        }
+
+        rows.sort((a, b) => (a.date > b.date ? 1 : -1));
+        const xs = rows.map(r => r.date);
+        const ys = rows.map(r => r[varY]);
+
+        const [xRange0, xRange1] = getYearRange(year);
+        if (xRange0) {
+          xAxisCfg.range = [xRange0, xRange1];
+        }
+
+        const shapes = makeBloomShapes(showLakeBlooms, showEstBlooms);
+
+        Plotly.react(divId, [{
+          x: xs, y: ys,
+          type: "scatter",
+          mode: "lines+markers",
+          line: { color: "#2E86AB", width: 2 },
+          marker: { color: "#2E86AB", size: 4 },
+          hovertemplate: "<b>Date:</b> %{x}<br><b>" + yAxisCfg.title + ":</b> %{y:.2f}<extra></extra>"
+        }], {
+          shapes,
+          xaxis: xAxisCfg,
+          yaxis: yAxisCfg,
+          hovermode: "x unified",
+          plot_bgcolor: "white",
+          paper_bgcolor: "white",
+          margin: { t: 20, r: 20, b: 50, l: 70 }
+        }, { displaylogo: false, responsive: true });
+
+      } else {
+        // ── SCATTER ──
+        let yRows, xRows;
+        if (SITE_VARS.has(varY)) {
+          yRows = filterRows(waterData, year, varY, "date", site);
+          if (site) yAxisCfg.title = `${yLabel} - ${SITE_NAMES[site] || site}`;
+        } else {
+          const allRows = filterRows(waterData, year, varY, "date", site);
+          yRows = dedupByDate(allRows, [varY]);
+        }
+
+        if (SITE_VARS.has(varX)) {
+          xRows = filterRows(waterData, year, "date", varX, site);
+          if (site) xAxisCfg.title = `${xLabel} - ${SITE_NAMES[site] || site}`;
+        } else {
+          const allRows = filterRows(waterData, year, "date", varX, site);
+          xRows = dedupByDate(allRows, [varX]);
+        }
+
+        // Join by date
+        const yByDate = new Map(yRows.map(r => [r.date, r[varY]]));
+        const xByDate = new Map(xRows.map(r => [r.date, r[varX]]));
+        const dates = [...new Set([...yByDate.keys(), ...xByDate.keys()])];
+        const plotX = [], plotY = [];
+        dates.forEach(d => {
+          const xv = xByDate.get(d), yv = yByDate.get(d);
+          if (xv != null && !isNaN(xv) && yv != null && !isNaN(yv)) {
+            plotX.push(xv);
+            plotY.push(yv);
+          }
+        });
+
+        Plotly.react(divId, [{
+          x: plotX, y: plotY,
+          type: "scatter",
+          mode: "markers",
+          marker: { color: "#2E86AB", size: 6, opacity: 0.75 },
+          hovertemplate: "<b>" + xLabel + ":</b> %{x:.2f}<br><b>" + yLabel + ":</b> %{y:.2f}<extra></extra>"
+        }], {
+          xaxis: xAxisCfg,
+          yaxis: yAxisCfg,
+          hovermode: "closest",
+          plot_bgcolor: "white",
+          paper_bgcolor: "white",
+          margin: { t: 20, r: 20, b: 60, l: 70 }
+        }, { displaylogo: false, responsive: true });
+      }
+    }
+
+    function renderAll() {
+      renderPlot(1);
+      if (showSecondPlot) renderPlot(2);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // MAP
+    // ────────────────────────────────────────────────────────────
+    function initMap() {
+      if (mapInitialized) return;
+      leafletMap = L.map("site-map");
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors"
+      }).addTo(leafletMap);
+      mapInitialized = true;
+    }
+
+    function updateMap() {
+      initMap();
+
+      // Determine highlighted sites from current selections
+      const getHighlighted = () => {
+        const sites = [];
+        [1, 2].forEach(i => {
+          if (i === 2 && !showSecondPlot) return;
+          const s = plotState[i];
+          sites.push(varToSite(s.varY, s.site));
+          if (s.varX !== "date") sites.push(varToSite(s.varX, s.site));
+        });
+        return new Set(sites);
+      };
+
+      const highlighted = getHighlighted();
+
+      // Remove existing markers
+      if (leafletMap._layers) {
+        Object.values(leafletMap._layers).forEach(layer => {
+          if (layer instanceof L.Marker) leafletMap.removeLayer(layer);
+        });
+      }
+
+      const latlngs = [];
+      siteLocations.forEach(loc => {
+        const isHighlighted = highlighted.has(loc.site);
+        const style = isHighlighted
+          ? "font-size:16px;font-weight:bold;background:yellow;padding:2px 4px;border-radius:2px;"
+          : "font-size:16px;font-weight:bold;padding:2px 4px;";
+
+        L.marker([loc.latitude, loc.longitude], { opacity: 0 })
+          .bindTooltip(loc.name, {
+            permanent: true,
+            direction: "auto",
+            className: "",
+            offset: [0, 0]
+          })
+          .addTo(leafletMap);
+
+        // Override the tooltip element style after adding
+        latlngs.push([loc.latitude, loc.longitude]);
+      });
+
+      if (latlngs.length) {
+        leafletMap.fitBounds(latlngs, { padding: [40, 40] });
+      }
+
+      // Apply highlight styles to tooltip elements
+      setTimeout(() => {
+        document.querySelectorAll(".leaflet-tooltip").forEach(el => {
+          const text = el.textContent.trim();
+          const loc = siteLocations.find(l => l.name === text);
+          if (loc && highlighted.has(loc.site)) {
+            el.style.fontWeight = "bold";
+            el.style.fontSize = "16px";
+            el.style.backgroundColor = "yellow";
+          } else {
+            el.style.fontWeight = "bold";
+            el.style.fontSize = "16px";
+          }
+        });
+        leafletMap.invalidateSize();
+      }, 100);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // PHASE SYSTEM
+    // ────────────────────────────────────────────────────────────
+    function applyPhase(newPhase) {
+      phase = newPhase;
+      const bloomControls = document.getElementById("bloom-controls");
+      if (phase === "phase3") {
+        bloomControls.classList.remove("hidden");
+        bloomControls.style.display = "flex";
+      } else {
+        bloomControls.classList.add("hidden");
+        showLakeBlooms = false;
+        showEstBlooms = false;
+        document.getElementById("show-lake-blooms").checked = false;
+        document.getElementById("show-est-blooms").checked = false;
+      }
+
+      // Rebuild selects (may add/remove tp and chl)
+      updatePlotControls(1);
+      updatePlotControls(2);
+      renderAll();
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // EVENT WIRING
+    // ────────────────────────────────────────────────────────────
+    function wireEvents() {
+      // Phase code
+      document.getElementById("phase-input").addEventListener("input", e => {
+        const val = e.target.value.trim().toLowerCase();
+        if (val === "nutrients") applyPhase("phase2");
+        else if (val === "blooms") applyPhase("phase3");
+      });
+
+      // Show second plot
+      document.getElementById("show-second-plot").addEventListener("change", e => {
+        showSecondPlot = e.target.checked;
+        document.getElementById("card2").style.display = showSecondPlot ? "flex" : "none";
+        if (showSecondPlot) {
+          updatePlotControls(2);
+          renderPlot(2);
+        }
+      });
+
+      // Lock Y
+      document.getElementById("lock-y-axis").addEventListener("change", e => {
+        lockYAxis = e.target.checked;
+        renderAll();
+      });
+
+      // Bloom toggles
+      document.getElementById("show-lake-blooms").addEventListener("change", e => {
+        showLakeBlooms = e.target.checked;
+        updateBloomLegend();
+        renderAll();
+      });
+      document.getElementById("show-est-blooms").addEventListener("change", e => {
+        showEstBlooms = e.target.checked;
+        updateBloomLegend();
+        renderAll();
+      });
+
+      // Map
+      document.getElementById("show-map-btn").addEventListener("click", () => {
+        document.getElementById("map-modal-overlay").classList.add("open");
+        updateMap();
+      });
+      document.getElementById("map-close").addEventListener("click", () => {
+        document.getElementById("map-modal-overlay").classList.remove("open");
+      });
+      document.getElementById("map-modal-overlay").addEventListener("click", e => {
+        if (e.target === document.getElementById("map-modal-overlay")) {
+          document.getElementById("map-modal-overlay").classList.remove("open");
+        }
+      });
+
+      // Per-plot selects
+      [1, 2].forEach(i => {
+        document.getElementById(`var-x${i}`).addEventListener("change", e => {
+          plotState[i].varX = e.target.value;
+          updatePlotControls(i); // rebuild Y to exclude chosen X
+          renderPlot(i);
+        });
+        document.getElementById(`var-y${i}`).addEventListener("change", e => {
+          plotState[i].varY = e.target.value;
+          updatePlotControls(i);
+          renderPlot(i);
+        });
+        document.getElementById(`year${i}`).addEventListener("change", e => {
+          plotState[i].year = e.target.value;
+          renderPlot(i);
+        });
+        document.getElementById(`site${i}`).addEventListener("change", e => {
+          plotState[i].site = e.target.value;
+          updateYearSelect(i);
+          renderPlot(i);
+        });
+      });
+    }
+
+    function updateBloomLegend() {
+      const leg = document.getElementById("bloom-legend");
+      if (showLakeBlooms || showEstBlooms) {
+        leg.classList.add("visible");
+      } else {
+        leg.classList.remove("visible");
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // INIT
+    // ────────────────────────────────────────────────────────────
+    async function init() {
+      await loadData();
+
+      wireEvents();
+
+      updatePlotControls(1);
+      updatePlotControls(2);
+
+      renderAll();
+    }
+
+    init().catch(err => {
+      document.getElementById("loading-overlay").innerHTML =
+        `<p style="color:red;padding:20px;">Failed to load data: ${err.message}<br>
+     Make sure the CSV files are in <code>app_data/</code> alongside <code>index.html</code>.</p>`;
+    });
+  </script>
+</body>
+
+</html>

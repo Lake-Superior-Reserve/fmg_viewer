@@ -122,9 +122,12 @@ water_data_loc <- tibble(
     )
   )
 
-# Export processed files for the Shiny App
+# Export processed files for the App
 write_rds(water_data, "app_data/water_data.rds")
 write_rds(water_data_loc, "app_data/locations.rds")
+
+write_csv(water_data, "app_data/water_data.csv", na = "")
+write_csv(water_data_loc, "app_data/locations.csv", na = "")
 
 # Process separate dataset for cyanobacteria blooms, standardizing to unified sites
 ls_bloom <- read_csv("raw_data/ls_bloom.csv") %>%
@@ -151,3 +154,4 @@ ls_bloom <- read_csv("raw_data/ls_bloom.csv") %>%
 
 # Export the prepared blooms dataset
 write_rds(ls_bloom, "app_data/blooms.rds")
+write_csv(ls_bloom, "app_data/blooms.csv", na = "")
