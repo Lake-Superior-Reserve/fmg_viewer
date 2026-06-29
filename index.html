@@ -717,7 +717,8 @@
         title: xLabel,
         showgrid: true,
         gridcolor: "lightgray",
-        automargin: true
+        automargin: true,
+        hoverformat: "<b>Date:</b> %B %d, %Y"
       };
 
       if (lockYAxis) {
@@ -759,12 +760,13 @@
           mode: "lines+markers",
           line: { color: "#2E86AB", width: 2 },
           marker: { color: "#2E86AB", size: 4 },
-          hovertemplate: "<b>Date:</b> %{x}<br><b>" + yAxisCfg.title + ":</b> %{y:.2f}<extra></extra>"
+          hovertemplate: "<b>" + yAxisCfg.title + ":</b> %{y:.2f}<extra></extra>"
         }], {
           shapes,
           xaxis: xAxisCfg,
           yaxis: yAxisCfg,
           hovermode: "x unified",
+          unifiedhovertitle: { text: "" },
           plot_bgcolor: "white",
           paper_bgcolor: "white",
           margin: { t: 20, r: 20, b: 70, l: 70 }
@@ -812,6 +814,7 @@
           xaxis: xAxisCfg,
           yaxis: yAxisCfg,
           hovermode: "closest",
+          hoverlabel: { bgcolor: "white" },
           plot_bgcolor: "white",
           paper_bgcolor: "white",
           margin: { t: 20, r: 20, b: 70, l: 70 }
